@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="anemia-screening-v1" version="1.0.0">
+    <steps>
+        <!-- Step 1: The Initial Form -->
+        <step id="patient_inputs" type="form" next="ai_eval">
+            <field id="pallor" type="text" required="true" label="Pallor Level (Type: 'severe', 'normal', or 'uncertain')" />
+            <field id="hb_level" type="number" required="false" label="Hemoglobin (g/dL)" />
+            <field id="patient_age" type="number" required="true" label="Patient Age" />
+        </step>
+
+        <!-- Step 2: The AI Processing Node -->
+        <step id="ai_eval" type="ai_screening">
+            <model name="anemia_net" version_constraint="^1.2" />
+            
+            <!-- We explicitly map ONLY the pallor field to send to the AI -->
+            <inputs>
+                <map from="pallor" to="pallor_feat" />
+            </inputs>
+            
+            <thresholds low_confidence="0.75" />
+            <fallback action="manual_referral" message="AI confidence was too low. Route to manual clinical exam." />
+            
+            <!-- Routing based on the AI's label response -->
+            <routing>
+                <branch condition="result.label == 'severe'" next="outcome_urgent" />
+                <branch condition="result.label == 'mild'" next="outcome_monitor" />
+                <default next="outcome_healthy" />
+            </routing>
+        </step>
+    </steps>
+    
+    <!-- The final terminal states of the app -->
+    <outcomes>
+        <outcome id="outcome_urgent" status="URGENT_REFERRAL" />
+        <outcome id="outcome_monitor" status="SUPPLEMENTATION_TRACK" />
+        <outcome id="outcome_healthy" status="DISCHARGE_HEALTHY" />
+    </outcomes>
+</workflow>

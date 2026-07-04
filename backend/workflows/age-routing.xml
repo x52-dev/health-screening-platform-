@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="senior-care-v1" version="1.0.0">
+    <steps>
+        <step id="demographics" type="form" next="vitals">
+            <!-- This is the field our new rules engine will check -->
+            <field id="patient_age" type="number" required="true" label="Patient Age (Years)" />
+        </step>
+
+        <step id="vitals" type="form" next="ai_eval">
+            <field id="systolic_bp" type="number" required="true" label="Systolic Blood Pressure" />
+            <field id="symptoms" type="text" required="false" label="Reported Symptoms" />
+        </step>
+
+        <step id="ai_eval" type="ai_screening">
+            <model name="general_triage_net" version_constraint="^1.0" />
+            <thresholds low_confidence="0.75" />
+            <fallback action="manual_referral" message="AI confidence too low." />
+            
+            <routing>
+                <!-- TEST 1: Routing based entirely on the form answer -->
+                <branch condition="form.patient_age > 65" next="outcome_geriatric" />
+                
+                <!-- TEST 2: Standard AI-based routing for younger patients -->
+                <branch condition="result.label == 'severe'" next="outcome_urgent" />
+                
+                <default next="outcome_routine" />
+            </routing>
+        </step>
+    </steps>
+    
+    <outcomes>
+        <outcome id="outcome_geriatric" status="GERIATRIC SPECIALIST PROTOCOL" />
+        <outcome id="outcome_urgent" status="URGENT CARE WARD" />
+        <outcome id="outcome_routine" status="ROUTINE OUTPATIENT CARE" />
+    </outcomes>
+</workflow>
