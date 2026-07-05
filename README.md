@@ -19,7 +19,13 @@ The platform converts clinical screening protocols into declarative **XML Schema
                                                                      │
 [ Idempotent Ingestion ] <── [ Final Resolution ] <── [ Branching Matrix ] <── [ Async AI Node (Groq) ]
 
+
 ```
+
+### Things to do next:
+
+- OCR based screening and questionaire generation
+- Multi tenant DB architecture for different vendor or organisation
 
 1. **Schema Parsing:** The frontend fetches or accepts an XML blueprint declaring form panels, numeric ranges, text patterns, parameter mappings for AI models, and custom routing logic.
 2. **Contextual UI Generation:** The generic layout generator initializes a clean multi-step wizard. It dynamically type-casts entries to maintain mathematical schema precision.
