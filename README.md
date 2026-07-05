@@ -178,7 +178,7 @@ The entire system is containerized. You do not need Python, Node.js, or local da
 1. Open your system terminal and navigate directly to the root project location:
 
 ```bash
-cd tanuh-ai-screening-platform
+cd health-screening-platform-
 
 ```
 
