@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="malnutrition_screening" firstStepId="muac_measurement">
+    
+    <!-- Step 1: Anthropometric Metrics -->
+    <step id="muac_measurement" type="form" next="ai_malnutrition_eval">
+        <field id="muac_mm" type="number" required="true" min="50" max="250" 
+               label="Mid-Upper Arm Circumference (MUAC) in mm" placeholder="e.g. 125" 
+               hint="Measure at the midpoint of the left upper arm. Range: 50mm - 250mm." />
+               
+        <field id="oedema_present" type="text" required="true" 
+               pattern="^\s*(yes|Yes|YES|no|No|NO)\s*$" 
+               label="Bilateral Pitting Oedema Present? (yes/no)" placeholder="no" 
+               hint="Check both feet for fluid retention retention retention. Type 'yes' or 'no'." />
+    </step>
+
+    <!-- Step 2: Tanuh AI Diagnostic Processing -->
+    <step id="ai_malnutrition_eval" type="ai_screening" next="outcome_normal_weight">
+        <model name="sam-mam-classifier" version_constraint="^1.0.0" />
+        <map>
+            <input key="muac" ref="muac_mm" />
+            <input key="oedema" ref="oedema_present" />
+        </map>
+        <fallback threshold="0.75" target="outcome_manual_triage" />
+        <routing>
+            <branch when="sam" target="outcome_sam_critical" />
+            <branch when="mam" target="outcome_mam_moderate" />
+        </routing>
+    </step>
+
+    <!-- Terminal Outcomes -->
+    <outcome id="outcome_sam_critical" label="Severe Acute Malnutrition (SAM) - Critical">
+        CRITICAL ALERT: Severe Acute Malnutrition verified. Immediately provision a therapeutic toolkit (RUTF), check for medical complications, and refer to the nearest stabilization center.
+    </outcome>
+
+    <outcome id="outcome_mam_moderate" label="Moderate Acute Malnutrition (MAM)">
+        MODERATE INTERVENTION: Moderate Acute Malnutrition identified. Register the household for targeted supplementary feeding programs and schedule a health worker tracking check in 7 days.
+    </outcome>
+
+    <outcome id="outcome_normal_weight" label="Normal Nutritional Profile">
+        NORMAL: Child's metrics fall within a standard healthy development curve. Provide standard nutritional counseling to the caregiver and re-screen at the next community drive.
+    </outcome>
+
+    <outcome id="outcome_manual_triage" label="Nutritional Review Referral">
+        SYSTEM FALLBACK: The metrics provided require manual clinical evaluation. Please re-measure manually and consult the supervising program head.
+    </outcome>
+</workflow>

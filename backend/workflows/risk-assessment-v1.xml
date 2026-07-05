@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="respiratory_risk" firstStepId="symptoms_primary">
+    
+    <!-- Step 1: Initial Triage Intake Form Panel -->
+    <step id="symptoms_primary" type="form" next="symptoms_secondary">
+        <field id="cough_duration_days" type="number" required="true" min="0" max="120" label="Duration of Cough (Days)" placeholder="e.g. 5" hint="Enter a number between 0 and 120 days." />
+        <field id="fever_present" type="text" required="true" pattern="^\s*(yes|Yes|YES|no|No|NO)\s*$" label="High Fever Logged? (yes/no)" placeholder="e.g. yes" hint="Please type 'yes' or 'no' (accepts capitals or spaces)." />
+    </step>
+
+    <!-- Step 2: Cascading Clinical Vitals Intake Page -->
+    <step id="symptoms_secondary" type="form" next="ai_respiratory_eval">
+        <field id="breathing_rate" type="number" required="true" min="8" max="80" label="Breathing Rate (Breaths per min)" placeholder="e.g. 24" hint="Enter measured breaths per minute (typically 12-60)." />
+        <field id="oxygen_saturation" type="number" required="true" min="40" max="100" label="Oxygen Saturation / SpO2 (%)" placeholder="e.g. 95" hint="Enter a percentage value between 40% and 100%." />
+    </step>
+
+    <!-- Step 3: AI Inference Node & Dynamic Structural Routing -->
+    <step id="ai_respiratory_eval" type="ai_screening">
+        <model name="pulmo-risk-classifier" version_constraint="^1.1.0" />
+        
+        <map>
+            <input key="cough" ref="cough_duration_days" />
+            <input key="fever" ref="fever_present" />
+            <input key="rr" ref="breathing_rate" />
+            <input key="spo2" ref="oxygen_saturation" />
+        </map>
+
+        <fallback threshold="0.80" target="triage_fallback" />
+
+        <routing>
+            <branch when="high_risk" target="urgent_hospitalization" />
+            <branch when="moderate_risk" target="step_clinical_exam" /> <!-- Cascades directly into a 3rd form step -->
+            <branch when="low_risk" target="routine_home_care" />
+        </routing>
+    </step>
+
+    <!-- Step 4: Conditional Form Panel (Triggered ONLY for moderate risk AI branches) -->
+    <step id="step_clinical_exam" type="form" next="outpatient_care">
+        <field id="chest_indrawing" type="text" required="true" pattern="^\s*(yes|Yes|YES|no|No|NO)\s*$" label="Visible Chest Indrawing Observed? (yes/no)" placeholder="no" hint="Look for subcostal retraction during inspiration. Enter yes/no." />
+        <field id="wheezing_sounds" type="text" required="true" pattern="^\s*(yes|Yes|YES|no|No|NO)\s*$" label="Stethoscope Wheezing Detected? (yes/no)" placeholder="yes" hint="Auscultate lungs for high-pitched whistling. Enter yes/no." />
+    </step>
+
+    <!-- Final Resolution Nodes / Outcomes -->
+    <outcome id="urgent_hospitalization" label="Urgent Hospital Isolation Required">
+        CRITICAL RECOGNITION: High severe respiratory distress or failure probability detected. Administer immediate emergency triage protocols, provide supplemental oxygen, and organize rapid transit to the nearest hospital facility.
+    </outcome>
+
+    <outcome id="outpatient_care" label="Outpatient Clinical Management">
+        MANAGED CARE: Moderate respiratory duress verified by localized clinical follow-up tracking. Issue targeted respiratory antibiotic prescriptions per national community guidelines and schedule a mandatory check-in within 48 hours.
+    </outcome>
+
+    <outcome id="routine_home_care" label="Routine Home Recovery">
+        STABLE: Low risk categorization. Advise home rest, continuous fluid tracking, and supportive paracetamol for comfort. Instruct health workers or family to immediately re-engage if short breath patterns intensify.
+    </outcome>
+
+    <outcome id="triage_fallback" label="Manual Clinical Triage Referral">
+        ALERT: System parameters fell beneath confidence metrics or encountered network disruption. Transitioning client processing to manual nursing diagnostics protocols immediately. Do not release patient until reviewed.
+    </outcome>
+
+</workflow>

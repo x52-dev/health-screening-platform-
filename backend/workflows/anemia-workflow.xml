@@ -1,38 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<workflow id="anemia-screening-v1" version="1.0.0">
-    <steps>
-        <!-- Step 1: The Initial Form -->
-        <step id="patient_inputs" type="form" next="ai_eval">
-            <field id="pallor" type="text" required="true" label="Pallor Level (Type: 'severe', 'normal', or 'uncertain')" />
-            <field id="hb_level" type="number" required="false" label="Hemoglobin (g/dL)" />
-            <field id="patient_age" type="number" required="true" label="Patient Age" />
-        </step>
-
-        <!-- Step 2: The AI Processing Node -->
-        <step id="ai_eval" type="ai_screening">
-            <model name="anemia_net" version_constraint="^1.2" />
-            
-            <!-- We explicitly map ONLY the pallor field to send to the AI -->
-            <inputs>
-                <map from="pallor" to="pallor_feat" />
-            </inputs>
-            
-            <thresholds low_confidence="0.75" />
-            <fallback action="manual_referral" message="AI confidence was too low. Route to manual clinical exam." />
-            
-            <!-- Routing based on the AI's label response -->
-            <routing>
-                <branch condition="result.label == 'severe'" next="outcome_urgent" />
-                <branch condition="result.label == 'mild'" next="outcome_monitor" />
-                <default next="outcome_healthy" />
-            </routing>
-        </step>
-    </steps>
+<workflow id="anemia-screening-v1" firstStepId="patient_inputs">
     
-    <!-- The final terminal states of the app -->
-    <outcomes>
-        <outcome id="outcome_urgent" status="URGENT_REFERRAL" />
-        <outcome id="outcome_monitor" status="SUPPLEMENTATION_TRACK" />
-        <outcome id="outcome_healthy" status="DISCHARGE_HEALTHY" />
-    </outcomes>
+    <!-- Step 1: Core Patient Inputs Form Step -->
+    <step id="patient_inputs" type="form" next="ai_eval">
+        <field id="pallor" type="text" required="true" 
+               pattern="^\s*(severe|Severe|SEVERE|normal|Normal|NORMAL|uncertain|Uncertain|UNCERTAIN)\s*$" 
+               label="Pallor Level (Type: 'severe', 'normal', or 'uncertain')" 
+               placeholder="e.g. normal" 
+               hint="Please enter exactly 'severe', 'normal', or 'uncertain' (accepts capitalization or spaces)." />
+               
+        <field id="hb_level" type="number" required="false" min="2" max="25" 
+               label="Hemoglobin (g/dL) - Optional" 
+               placeholder="e.g. 12.4" 
+               hint="If available, enter a valid clinical hemoglobin reading between 2.0 and 25.0 g/dL." />
+               
+        <field id="patient_age" type="number" required="true" min="0" max="125" 
+               label="Patient Age (Years)" 
+               placeholder="e.g. 28" 
+               hint="Requires a valid age entry between 0 and 125." />
+    </step>
+
+    <!-- Step 2: Tanuh AI Core Evaluation & Branch Routing Node -->
+    <!-- Note: 'next' attribute handles your original <default> route gracefully -->
+    <step id="ai_eval" type="ai_screening" next="outcome_healthy">
+        <model name="anemia_net" version_constraint="^1.2.0" />
+        
+        <!-- Maps your form state field 'pallor' to the AI parameter payload 'pallor_feat' -->
+        <map>
+            <input key="pallor_feat" ref="pallor" />
+        </map>
+        
+        <!-- Consolidated low confidence threshold tracking -->
+        <fallback threshold="0.75" target="manual_referral" />
+        
+        <!-- Evaluates result.label string directly matching 'when' expressions -->
+        <routing>
+            <branch when="severe" target="outcome_urgent" />
+            <branch when="mild" target="outcome_monitor" />
+        </routing>
+    </step>
+    
+    <!-- Final Terminal State Resolutions (Flattened structural tree elements) -->
+    <outcome id="outcome_urgent" label="Urgent Medical Referral Required">
+        CRITICAL CLASSIFICATION: High-probability severe anemia profile recognized by the engine metrics. Initiate immediate emergency triage, dispatch iron therapy warnings, and route patient to a specialist officer.
+    </outcome>
+
+    <outcome id="outcome_monitor" label="Dietary Supplementation Track">
+        MODERATE CLASSIFICATION: Mild anemia variant indicated. Log patient onto the community iron supplementation tracker and schedule an automated follow-up triage visit within 14 days.
+    </outcome>
+
+    <outcome id="outcome_healthy" label="Discharge Healthy / Standard Range">
+        NORMAL CLASSIFICATION: Patient data lies within typical health indicators. No immediate therapeutic clinical actions are required at this juncture. Re-screen during routine community health checks.
+    </outcome>
+
+    <outcome id="manual_referral" label="Manual Clinical Triage Fallback">
+        ALERT: AI engine confidence thresholds were insufficient to calculate a deterministic outcome path. Re-route tracking to traditional on-site nursing diagnostics protocols manually.
+    </outcome>
+
 </workflow>
