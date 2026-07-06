@@ -2,11 +2,47 @@ import { useState } from "preact/hooks";
 
 export function Uploader({ onFileLoaded }) {
   const [dragActive, setDragActive] = useState(false);
+  const [errorState, setErrorState] = useState(null);
 
   const handleFile = (file) => {
     if (!file) return;
+    setErrorState(null);
+
     const reader = new FileReader();
-    reader.onload = (evt) => onFileLoaded(evt.target.result);
+    reader.onload = (evt) => {
+      const rawText = evt.target.result;
+
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(rawText, "application/xml");
+        const parseError = xmlDoc.getElementsByTagName("parsererror");
+
+        if (parseError.length > 0) {
+          setErrorState("Upload Error: Invalid XML syntax detected.");
+          return;
+        }
+
+        const workflowNode = xmlDoc.querySelector("workflow");
+        if (!workflowNode) {
+          setErrorState("Upload Error: Missing <workflow> root node.");
+          return;
+        }
+
+        const workflowId = workflowNode.getAttribute("id");
+        if (!workflowId) {
+          setErrorState(
+            "Upload Error: <workflow> must contain a valid 'id' attribute.",
+          );
+          return;
+        }
+
+        // Pass an object containing both the raw string and the extracted ID
+        onFileLoaded({ rawText, workflowId });
+      } catch (error) {
+        console.error("XML Parsing fault:", error);
+        setErrorState("Critical failure parsing the workflow file.");
+      }
+    };
     reader.readAsText(file);
   };
 
@@ -21,7 +57,6 @@ export function Uploader({ onFileLoaded }) {
         color: "#0f172a",
       }}
     >
-      {/* Tanuh AI Enterprise Branding Header */}
       <div style={{ textAlign: "center", marginBottom: "32px" }}>
         <div
           style={{
@@ -66,7 +101,6 @@ export function Uploader({ onFileLoaded }) {
         </p>
       </div>
 
-      {/* Drag & Drop Zone */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -79,25 +113,32 @@ export function Uploader({ onFileLoaded }) {
           handleFile(e.dataTransfer.files[0]);
         }}
         style={{
-          border: `2px dashed ${dragActive ? "#2563eb" : "#cbd5e1"}`,
+          border: `2px dashed ${errorState ? "#ef4444" : dragActive ? "#2563eb" : "#cbd5e1"}`,
           padding: "48px 32px",
           borderRadius: "12px",
           cursor: "pointer",
-          background: dragActive ? "#eff6ff" : "#ffffff",
+          background: errorState
+            ? "#fef2f2"
+            : dragActive
+              ? "#eff6ff"
+              : "#ffffff",
           boxShadow:
             "0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)",
           textAlign: "center",
           transition: "all 0.2s ease-in-out",
         }}
       >
-        {/* Document Icon Graphic */}
         <div style={{ marginBottom: "16px" }}>
           <svg
             style={{
               width: "48px",
               height: "48px",
               margin: "0 auto",
-              color: dragActive ? "#2563eb" : "#94a3b8",
+              color: errorState
+                ? "#ef4444"
+                : dragActive
+                  ? "#2563eb"
+                  : "#94a3b8",
               transition: "color 0.2s ease",
             }}
             fill="none"
@@ -114,25 +155,40 @@ export function Uploader({ onFileLoaded }) {
           </svg>
         </div>
 
-        <p
-          style={{
-            fontSize: "15px",
-            fontWeight: "500",
-            color: "#334155",
-            margin: "0 0 6px 0",
-          }}
-        >
-          Drag and drop your workflow file here
-        </p>
-        <p
-          style={{
-            fontSize: "13px",
-            color: "#64748b",
-            margin: "0 0 24px 0",
-          }}
-        >
-          Supports XML structure definitions up to 5MB
-        </p>
+        {errorState ? (
+          <p
+            style={{
+              fontSize: "15px",
+              fontWeight: "600",
+              color: "#b91c1c",
+              margin: "0 0 24px 0",
+            }}
+          >
+            {errorState}
+          </p>
+        ) : (
+          <>
+            <p
+              style={{
+                fontSize: "15px",
+                fontWeight: "500",
+                color: "#334155",
+                margin: "0 0 6px 0",
+              }}
+            >
+              Drag and drop your workflow file here
+            </p>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#64748b",
+                margin: "0 0 24px 0",
+              }}
+            >
+              Supports XML structure definitions up to 5MB
+            </p>
+          </>
+        )}
 
         <input
           type="file"
@@ -163,7 +219,6 @@ export function Uploader({ onFileLoaded }) {
         </label>
       </div>
 
-      {/* Compliance / System Verification Footer Hint */}
       <div
         style={{
           display: "flex",

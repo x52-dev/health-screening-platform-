@@ -4,6 +4,7 @@ import { apiClient } from "../utils/api.js";
 export function AIScreeningStep({
   stepNode,
   formState,
+  sessionId, // Received from WorkflowEngine for stateful tracking
   onRecordAiEvaluation,
   onComplete,
 }) {
@@ -11,16 +12,24 @@ export function AIScreeningStep({
   const [errorState, setErrorState] = useState(null);
 
   useEffect(() => {
-    executeInference();
+    // Enterprise Memory Management: Native cancellation token
+    const abortController = new AbortController();
+
+    executeInference(abortController.signal);
+
+    // Cleanup function fires if the component unmounts mid-request
+    return () => abortController.abort();
   }, [stepNode]);
 
-  const executeInference = async () => {
+  const executeInference = async (signal) => {
     setLoading(true);
     setErrorState(null);
 
     try {
       const modelElement = stepNode.querySelector("model");
       const inputsPayload = {};
+
+      // Support both <bindings> (legacy) and <map> (modern) syntax
       const bindings = stepNode.querySelectorAll("bindings input, map input");
 
       if (bindings.length > 0) {
@@ -33,17 +42,32 @@ export function AIScreeningStep({
         Object.assign(inputsPayload, formState);
       }
 
+      // Dynamically extract allowed branches to constrain the backend LLM prompt
+      const branchNodes = Array.from(
+        stepNode.querySelectorAll("routing branch, branch"),
+      );
+      const availableBranches = branchNodes
+        .map((b) => b.getAttribute("when"))
+        .filter(Boolean);
+
       const payload = {
-        model_name: modelElement?.getAttribute("name") || "default-model",
-        version_constraint:
-          modelElement?.getAttribute("version_constraint") || "*",
-        inputs: inputsPayload,
+        session_id: sessionId,
+        model_name:
+          modelElement?.getAttribute("name") || "llama-3.1-8b-instant",
+        current_step_id: stepNode.getAttribute("id") || "ai_eval",
+        step_inputs: inputsPayload,
+        available_branches: availableBranches,
       };
 
-      const result = await apiClient.post("/api/v1/ai/screen", payload);
+      // Execute stateful inference against the new endpoint
+      const result = await apiClient.post(
+        "/api/v1/ai/mid-screen-eval",
+        payload,
+        { signal },
+      );
 
       onRecordAiEvaluation({
-        step_id: stepNode.getAttribute("id"),
+        step_id: payload.current_step_id,
         model: payload.model_name,
         result: result,
       });
@@ -55,21 +79,26 @@ export function AIScreeningStep({
         .querySelector("fallback")
         ?.getAttribute("target");
 
-      // FIXED: Swapped out server-side logger reference with proper client logging wrappers
-      if (result.fallback_triggered || result.confidence < fallbackThreshold) {
+      if (result.fallback_triggered) {
         console.warn(
-          `[Tanuh AI Evaluation] Confidence (${result.confidence}) beneath threshold (${fallbackThreshold}). Executing fallback.`,
+          `[Tanuh AI Evaluation] Fallback triggered by server. Reason: ${result.error}`,
         );
+      } else if (result.confidence < fallbackThreshold) {
+        console.warn(
+          `[Tanuh AI Evaluation] Confidence (${result.confidence}) is below threshold (${fallbackThreshold}). Executing fallback.`,
+        );
+      }
+
+      // Route to human fallback if confidence is low or API explicitly triggered it
+      if (result.fallback_triggered || result.confidence < fallbackThreshold) {
         if (fallbackTarget) return onComplete(fallbackTarget);
         throw new Error(
           "Threshold unfulfilled with no fallback target designated.",
         );
       }
 
-      const branches = Array.from(
-        stepNode.querySelectorAll("routing branch, branch"),
-      );
-      const matchedBranch = branches.find(
+      // Standard Deterministic Routing
+      const matchedBranch = branchNodes.find(
         (b) => b.getAttribute("when") === result.label,
       );
 
@@ -86,6 +115,8 @@ export function AIScreeningStep({
         `Unresolvable routing path for label configuration: "${result.label}"`,
       );
     } catch (err) {
+      if (err.name === "AbortError") return; // Ignore errors caused by intentional unmounting
+
       console.error("[Tanuh AI Routing Crash]:", err);
 
       const errorTarget =
@@ -121,7 +152,6 @@ export function AIScreeningStep({
           fontFamily: "system-ui, sans-serif",
         }}
       >
-        {/* Portable Core CSS Micro-Spinner */}
         <div
           style={{
             width: "32px",
@@ -142,10 +172,10 @@ export function AIScreeningStep({
             margin: "0 0 4px 0",
           }}
         >
-          Evaluating Clinical Telemetry
+          Evaluating Case Context
         </p>
         <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
-          Processing localized risk factors via Tanuh AI nodes...
+          Processing accumulated state via Tanuh AI orchestration...
         </p>
       </div>
     );
@@ -215,7 +245,7 @@ export function AIScreeningStep({
           </button>
         ) : (
           <button
-            onClick={executeInference}
+            onClick={() => executeInference()} // Retry without passing the event object
             style={{
               width: "100%",
               padding: "12px",

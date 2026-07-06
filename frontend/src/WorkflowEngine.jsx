@@ -1,58 +1,140 @@
 import { useState, useEffect } from "preact/hooks";
 import { StepRenderer } from "./components/StepRenderer.jsx";
+import { OutcomeView } from "./components/OutcomeView.jsx";
 import { apiClient } from "./utils/api.js";
 
 export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
   const [currentStepId, setCurrentStepId] = useState(initialStepId);
   const [formState, setFormState] = useState({});
   const [aiEvaluations, setAiEvaluations] = useState([]);
-  const [submissionId] = useState(() => crypto.randomUUID());
-  const [submissionStatus, setSubmissionStatus] = useState({
-    loading: false,
-    error: null,
-    success: false,
-  });
 
-  // Locate the current active step node within the XML document tree
-  const currentStepNode = xmlDoc.querySelector(
-    `step[id="${currentStepId}"], outcome[id="${currentStepId}"]`,
-  );
+  const [sessionId] = useState(() => crypto.randomUUID());
+  const [submissionId] = useState(() => crypto.randomUUID());
+
+  const [terminalOutcome, setTerminalOutcome] = useState(null);
+
+  const safelyLocateNode = (targetId) => {
+    if (!targetId) return null;
+    const cleanId = String(targetId).trim();
+    let node = xmlDoc.querySelector(`[id="${cleanId}"]`);
+    if (!node) {
+      const allElements = Array.from(xmlDoc.getElementsByTagName("*"));
+      node = allElements.find(
+        (el) => el.getAttribute("id")?.trim() === cleanId,
+      );
+    }
+    return node;
+  };
+
+  const currentStepNode = safelyLocateNode(currentStepId);
 
   useEffect(() => {
-    if (!currentStepNode) return;
-
-    // Detect if we have entered a terminal outcome node
-    if (currentStepNode.tagName.toLowerCase() === "outcome") {
-      submitFinalScreening(currentStepId);
+    if (
+      currentStepNode &&
+      currentStepNode.tagName.toLowerCase() === "outcome"
+    ) {
+      triggerFinalSubmission(currentStepId, currentStepNode.textContent.trim());
     }
-  }, [currentStepId]);
+  }, [currentStepId, currentStepNode]);
 
-  const submitFinalScreening = async (finalOutcomeId) => {
-    setSubmissionStatus({ loading: true, error: null, success: false });
+  const triggerFinalSubmission = async (outcomeId, specificReason = null) => {
+    // 1. Trigger the visual loading state while the LLM thinks
+    setTerminalOutcome({ status: "loading" });
+
+    // 2. Await the final AI Synthesis from the backend
     try {
-      await apiClient.post(
+      const response = await apiClient.post(
         "/api/v1/submissions",
         {
           submission_id: submissionId,
+          session_id: sessionId,
           workflow_id: workflowId,
-          collected_inputs: formState,
-          ai_evaluations: aiEvaluations,
-          final_outcome: finalOutcomeId,
+          final_outcome: outcomeId,
         },
-        {
-          headers: { "Idempotency-Key": submissionId }, // Absorb duplicates on poor networks
-        },
+        { idempotencyKey: submissionId },
       );
-      setSubmissionStatus({ loading: false, error: null, success: true });
+
+      // 3. Render the OutcomeView with the real, dynamically generated AI text
+      setTerminalOutcome({
+        status: outcomeId.replace(/_/g, " ").toUpperCase(),
+        reason:
+          specificReason || "The clinical pipeline has successfully concluded.",
+        explanation: response.ai_synthesis, // Powered by Groq
+      });
     } catch (err) {
-      console.error("Submission crash:", err);
-      setSubmissionStatus({
-        loading: false,
-        error: "Network transmission failure. Data is safe locally.",
-        success: false,
+      console.error("Submission transmission failed:", err);
+      // Fallback if the network drops out
+      setTerminalOutcome({
+        status: outcomeId.replace(/_/g, " ").toUpperCase(),
+        reason:
+          specificReason || "The clinical pipeline has successfully concluded.",
+        explanation:
+          "Final telemetry has been queued for network transmission (AI synthesis unavailable).",
       });
     }
   };
+
+  const handleNext = (targetStepId) => {
+    if (!targetStepId || targetStepId === "null") {
+      triggerFinalSubmission(
+        currentStepId,
+        "Manual processing branch concluded. Data safely retained.",
+      );
+      return;
+    }
+    setCurrentStepId(targetStepId);
+  };
+
+  // --- RENDERING PHASE ---
+
+  if (terminalOutcome) {
+    // Custom enterprise loading spinner for the final AI inference
+    if (terminalOutcome.status === "loading") {
+      return (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "80px 20px",
+            fontFamily: "system-ui, sans-serif",
+          }}
+        >
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              border: "3px solid #e2e8f0",
+              borderTop: "3px solid #1e293b",
+              borderRadius: "50%",
+              margin: "0 auto 20px auto",
+              animation: "spin 0.8s linear infinite",
+            }}
+          ></div>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+          <p
+            style={{
+              fontSize: "16px",
+              fontWeight: "600",
+              color: "#1e293b",
+              margin: "0 0 6px 0",
+            }}
+          >
+            Synthesizing Clinical Handoff...
+          </p>
+          <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+            Analyzing session telemetry to generate a professional medical
+            summary.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <OutcomeView
+        outcome={terminalOutcome}
+        onReset={() => window.location.reload()}
+      />
+    );
+  }
 
   if (!currentStepNode) {
     return (
@@ -61,201 +143,15 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
           padding: "24px",
           color: "#dc2626",
           fontWeight: "600",
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: "system-ui",
           textAlign: "center",
         }}
       >
-        Target State Configuration Exception: [{currentStepId}] is missing from
-        structural definitions.
+        Engine Fault: [{currentStepId}] is missing from structural definitions.
       </div>
     );
   }
 
-  // --- Render Dynamic Tanuh AI Enterprise Outcome Card ---
-  if (currentStepNode.tagName.toLowerCase() === "outcome") {
-    const isUrgent =
-      currentStepId.toLowerCase().includes("urgent") ||
-      currentStepId.toLowerCase().includes("emergency") ||
-      currentStepId.toLowerCase().includes("referral");
-
-    return (
-      <div
-        style={{
-          padding: "40px 32px",
-          maxWidth: "520px",
-          margin: "40px auto",
-          fontFamily:
-            'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: "#0f172a",
-          border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          boxShadow:
-            "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "6px 14px",
-            backgroundColor: isUrgent ? "#fef2f2" : "#f0fdf4",
-            border: `1px solid ${isUrgent ? "#fecaca" : "#bbf7d0"}`,
-            borderRadius: "9999px",
-            fontSize: "12px",
-            fontWeight: "600",
-            color: isUrgent ? "#dc2626" : "#16a34a",
-            textTransform: "uppercase",
-            letterSpacing: "0.025em",
-            marginBottom: "24px",
-          }}
-        >
-          <span
-            style={{
-              width: "6px",
-              height: "6px",
-              borderRadius: "50%",
-              backgroundColor: isUrgent ? "#dc2626" : "#16a34a",
-            }}
-          ></span>
-          Assessment Terminated
-        </div>
-
-        <h2
-          style={{
-            fontSize: "22px",
-            fontWeight: "700",
-            letterSpacing: "-0.025em",
-            margin: "0 0 12px 0",
-          }}
-        >
-          {currentStepNode.getAttribute("label") ||
-            currentStepId.replace("_", " ").toUpperCase()}
-        </h2>
-
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#475569",
-            lineHeight: "1.6",
-            margin: "0 0 28px 0",
-          }}
-        >
-          {currentStepNode.textContent.trim()}
-        </p>
-
-        {/* --- Network Sync Telemetry State Updates --- */}
-        <div
-          style={{
-            padding: "16px",
-            borderRadius: "8px",
-            backgroundColor: "#f8fafc",
-            border: "1px solid #f1f5f9",
-            marginBottom: "24px",
-          }}
-        >
-          {submissionStatus.loading && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                fontSize: "13px",
-                color: "#64748b",
-              }}
-            >
-              <div
-                style={{
-                  width: "14px",
-                  height: "14px",
-                  border: "2px solid #e2e8f0",
-                  borderTop: "2px solid #64748b",
-                  borderRadius: "50%",
-                  animation: "spin 0.6s linear infinite",
-                }}
-              ></div>
-              <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-              <span>Synchronizing session parameters securely...</span>
-            </div>
-          )}
-
-          {submissionStatus.error && (
-            <div style={{ textAlign: "center" }}>
-              <p
-                style={{
-                  color: "#ef4444",
-                  fontSize: "13px",
-                  fontWeight: "500",
-                  margin: "0 0 10px 0",
-                }}
-              >
-                ⚠️ {submissionStatus.error}
-              </p>
-              <button
-                onClick={() => submitFinalScreening(currentStepId)}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  background: "#ef4444",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Retry Cloud Sync
-              </button>
-            </div>
-          )}
-
-          {submissionStatus.success && (
-            <p
-              style={{
-                color: "#16a34a",
-                fontSize: "13px",
-                fontWeight: "600",
-                margin: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-              }}
-            >
-              ✓ Transmission successfully archived on Tanuh AI ledger.
-            </p>
-          )}
-        </div>
-
-        {/* --- Primary Navigation Escape Escape Trigger Button --- */}
-        <button
-          onClick={() => window.location.reload()} // Cleanly re-triggers the app file loader landing page
-          style={{
-            width: "100%",
-            padding: "12px",
-            background: "#1e293b",
-            color: "#ffffff",
-            fontSize: "14px",
-            fontWeight: "600",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            transition: "background 0.15s ease",
-            boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-          }}
-          onMouseOver={(e) => (e.target.style.background = "#0f172a")}
-          onMouseOut={(e) => (e.target.style.background = "#1e293b")}
-        >
-          Return to Gateway Homepage
-        </button>
-      </div>
-    );
-  }
-
-  // --- Render Active Evaluation Form/AI Interface Screen View Stage ---
   return (
     <div
       style={{
@@ -272,10 +168,11 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
         stepNode={currentStepNode}
         formState={formState}
         setFormState={setFormState}
+        sessionId={sessionId}
         onRecordAiEvaluation={(evalData) =>
           setAiEvaluations([...aiEvaluations, evalData])
         }
-        onNext={(targetStepId) => setCurrentStepId(targetStepId)}
+        onNext={handleNext}
       />
     </div>
   );

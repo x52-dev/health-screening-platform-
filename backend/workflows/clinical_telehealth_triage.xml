@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="clinical_telehealth_triage">
+    <!-- Phase 1: Data Collection -->
+    <step id="patient_intake" type="form" next="clinical_synthesis_eval">
+        <field id="patient_age" type="number" required="true" min="0" max="120" label="Patient Age" />
+        <field id="systolic_bp" type="number" required="true" min="70" max="250" label="Systolic Blood Pressure" />
+        <field id="reported_symptoms" type="text" required="true" label="Reported Symptoms" hint="Briefly describe primary complaints." />
+    </step>
+
+    <!-- Phase 2: Mid-Workflow AI Evaluation -->
+    <ai_screening id="clinical_synthesis_eval">
+        <model name="llama-3.1-8b-instant" version_constraint="1.2" />
+        
+        <!-- Maps UI form state keys into the AI inference payload -->
+        <bindings>
+            <input key="age" ref="patient_age" />
+            <input key="blood_pressure" ref="systolic_bp" />
+            <input key="complaint" ref="reported_symptoms" />
+        </bindings>
+        
+        <!-- Deterministic routing based on JSON label returned by the LLM -->
+        <routing>
+            <branch when="critical" target="emergency_dispatch_form" />
+            <branch when="routine" target="standard_appointment_form" />
+        </routing>
+
+        <!-- SLA Guardrails: If LLM confidence drops below 85% or times out, force human review -->
+        <fallback threshold="0.85" target="manual_physician_review" type="error" />
+    </ai_screening>
+
+    <!-- Phase 3: Branch Outcomes -->
+    <step id="emergency_dispatch_form" type="form">
+        <field id="location_override" type="text" required="true" label="Confirm Patient Location for Dispatch" />
+    </step>
+
+    <step id="standard_appointment_form" type="form">
+        <field id="preferred_date" type="text" required="true" label="Preferred Appointment Date (YYYY-MM-DD)" pattern="\d{4}-\d{2}-\d{2}" />
+    </step>
+</workflow>

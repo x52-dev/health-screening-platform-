@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="er_triage_protocol">
+    
+    <!-- Stage 1: Clinical Vitals Intake -->
+    <step id="vitals_intake" type="form" next="ai_triage_eval">
+        <field id="patient_age" type="number" required="true" min="0" max="120" label="Patient Age (Years)" />
+        <field id="heart_rate" type="number" required="true" min="30" max="250" label="Heart Rate (BPM)" />
+        <field id="systolic_bp" type="number" required="true" min="60" max="250" label="Systolic Blood Pressure (mmHg)" />
+        <field id="symptoms" type="text" required="true" label="Chief Complaint" placeholder="Describe symptoms and duration..." />
+    </step>
+
+    <!-- Stage 2: AI Clinical Synthesis Engine -->
+    <ai_screening id="ai_triage_eval">
+        <model name="llama-3.1-8b-instant" />
+        <bindings>
+            <input key="age" ref="patient_age" />
+            <input key="heart_rate" ref="heart_rate" />
+            <input key="blood_pressure" ref="systolic_bp" />
+            <input key="complaint" ref="symptoms" />
+        </bindings>
+        <routing>
+            <branch when="high_risk" target="red_zone_resuscitation" />
+            <branch when="low_risk" target="green_zone_waiting" />
+        </routing>
+        <!-- High threshold ensures human review if the AI is unsure -->
+        <fallback threshold="0.80" target="manual_triage_override" type="error" />
+    </ai_screening>
+
+    <!-- Stage 3A: Critical Emergency Path -->
+    <step id="red_zone_resuscitation" type="form">
+        <field id="icu_bed" type="text" required="true" label="ICU Bed Assignment" hint="Requires immediate attending physician." />
+        <field id="cath_lab_prep" type="text" required="true" label="Prepare Cath Lab? (Yes/No)" />
+    </step>
+
+    <!-- Stage 3B: Non-Urgent Path -->
+    <step id="green_zone_waiting" type="form">
+        <field id="wait_time" type="number" required="true" label="Estimated Queue Time (Minutes)" />
+        <field id="discharge_meds" type="text" required="true" label="Prescribed OTC Medication" />
+    </step>
+
+    <!-- Stage 3C: Fallback / Confidence Failure Path -->
+    <step id="manual_triage_override" type="form">
+        <field id="nurse_notes" type="text" required="true" label="Manual Triage Notes" hint="AI confidence fell below 80%. Manual triage required." />
+    </step>
+
+</workflow>

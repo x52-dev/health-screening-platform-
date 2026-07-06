@@ -1,9 +1,10 @@
-export function OutcomeView({ outcome }) {
+export function OutcomeView({ outcome, onReset }) {
   // Determine color accents based on triage severity flags
   const isCritical =
     outcome.status.toLowerCase().includes("referral") ||
     outcome.status.toLowerCase().includes("emergency") ||
-    outcome.status.toLowerCase().includes("urgent");
+    outcome.status.toLowerCase().includes("urgent") ||
+    outcome.status.toLowerCase().includes("fault");
 
   const statusColor = isCritical ? "#dc2626" : "#16a34a";
   const statusBg = isCritical ? "#fef2f2" : "#f0fdf4";
@@ -61,7 +62,7 @@ export function OutcomeView({ outcome }) {
           letterSpacing: "-0.02em",
         }}
       >
-        {outcome.status.replace("_", " ").toUpperCase()}
+        {outcome.status.replace(/_/g, " ").toUpperCase()}
       </h3>
 
       {outcome.reason && (
@@ -119,7 +120,7 @@ export function OutcomeView({ outcome }) {
                 letterSpacing: "0.05em",
               }}
             >
-              AI Clinical Synthesis
+              AI Synthesis
             </strong>
           </div>
           <p
@@ -136,7 +137,7 @@ export function OutcomeView({ outcome }) {
       )}
 
       <button
-        onClick={() => window.location.reload()}
+        onClick={onReset || (() => window.location.reload())}
         style={{
           width: "100%",
           padding: "12px",
@@ -153,7 +154,7 @@ export function OutcomeView({ outcome }) {
         onMouseOver={(e) => (e.target.style.background = "#0f172a")}
         onMouseOut={(e) => (e.target.style.background = "#1e293b")}
       >
-        Initialize New Screening Session
+        Initialize New Session
       </button>
     </div>
   );

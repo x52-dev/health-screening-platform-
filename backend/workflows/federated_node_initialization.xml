@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow id="federated_node_initialization">
+    <!-- Standard Intake Form with Strict Constraints -->
+    <step id="node_configuration" type="form" next="hyperparameter_tuning">
+        <field id="client_id" type="text" required="true" label="Node Client Identifier" hint="Unique alphanumeric identifier for this decentralized participant." />
+        <field id="local_epochs" type="number" required="true" min="1" max="50" label="Local Training Epochs" />
+        <field id="batch_size" type="number" required="true" min="8" max="512" label="Batch Size" hint="Memory constrained: Do not exceed 512 for standard silicion architectures." />
+    </step>
+
+    <step id="hyperparameter_tuning" type="form">
+        <field id="learning_rate" type="number" required="true" min="0.0001" max="0.1" label="Learning Rate" />
+    </step>
+</workflow>

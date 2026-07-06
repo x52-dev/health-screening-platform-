@@ -1,15 +1,26 @@
 version: "3.8"
+
 services:
-  backend:
+  # --- BACKEND ---
+  api:
     build: ./backend
-    env_file:
-      - .env
     ports:
       - "8000:8000"
+    # THE FIX: This maps your live local backend folder into the container
+    volumes:
+      - ./backend:/app
+    # Ensure your command includes the --reload flag!
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-  frontend:
+  # --- FRONTEND ---
+  web:
     build: ./frontend
-    env_file:
-      - .env
     ports:
       - "5173:5173"
+    # THE FIX: This maps your live local frontend folder into the container
+    volumes:
+      - ./frontend:/app
+      # This prevents your local node_modules from overwriting the container's Linux node_modules
+      - /app/node_modules
+    # Ensure Vite is running in dev mode
+    command: npm run dev -- --host 0.0.0.0

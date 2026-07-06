@@ -1,21 +1,27 @@
 import { useState } from "preact/hooks";
-import { parseWorkflowXML } from "./utils/xmlParser.js"; // add .js
-import { Uploader } from "./components/Uploader.jsx"; // add .jsx
-import { WorkflowEngine } from "./WorkflowEngine.jsx"; // add .jsx
+import { parseWorkflowXML } from "./utils/xmlParser.js";
+import { Uploader } from "./components/Uploader.jsx";
+import { WorkflowEngine } from "./WorkflowEngine.jsx";
 
 export function App() {
   const [engineConfig, setEngineConfig] = useState(null);
 
-  const handleXmlContent = (text) => {
+  // Updated to accept the robust payload from the Enterprise Uploader
+  const handleFileLoaded = (payload) => {
     try {
-      setEngineConfig(parseWorkflowXML(text));
+      const parsedConfig = parseWorkflowXML(payload.rawText);
+      setEngineConfig({
+        ...parsedConfig,
+        // Override with the securely extracted ID from the Uploader if present
+        workflowId: payload.workflowId || parsedConfig.workflowId,
+      });
     } catch (err) {
       alert(err.message);
     }
   };
 
   if (!engineConfig) {
-    return <Uploader onFileLoaded={handleXmlContent} />;
+    return <Uploader onFileLoaded={handleFileLoaded} />;
   }
 
   return (

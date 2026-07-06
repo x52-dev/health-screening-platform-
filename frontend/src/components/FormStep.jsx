@@ -9,23 +9,9 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
   };
 
   const handleInputChange = (fieldId, type, value) => {
-    // Instantly remove custom validation blocks so the user can re-submit
-    const inputElement = document.getElementById(`input-${fieldId}`);
-    if (inputElement) {
-      inputElement.setCustomValidity("");
-    }
-
-    // Retain proper scalar type metrics for downstream AI payloads
     const processedValue =
       type === "number" && value !== "" ? Number(value) : value;
     setFormState({ ...formState, [fieldId]: processedValue });
-  };
-
-  const handleInvalidInput = (e, hintText) => {
-    // Intercept default browser text and swap with custom XML or fallback strings
-    if (hintText) {
-      e.target.setCustomValidity(hintText);
-    }
   };
 
   return (
@@ -37,7 +23,6 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
         color: "#0f172a",
       }}
     >
-      {/* Module Title Section */}
       <div
         style={{
           borderBottom: "1px solid #e2e8f0",
@@ -66,11 +51,10 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
             letterSpacing: "-0.02em",
           }}
         >
-          {stepId.replace("_", " ")}
+          {stepId.replace(/_/g, " ")}
         </h3>
       </div>
 
-      {/* Dynamic Field Generation Map */}
       {fields.map((field) => {
         const fid = field.getAttribute("id");
         const fType = field.getAttribute("type") || "text";
@@ -79,25 +63,7 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
         const minAttr = field.getAttribute("min");
         const maxAttr = field.getAttribute("max");
         const patternAttr = field.getAttribute("pattern");
-        let hintAttr = field.getAttribute("hint");
-
-        // --- DEFENSIVE UX FALLBACK HINT ENGINE ---
-        // Prevents unassisted browser blockages if the XML developer forgot hints
-        if (!hintAttr) {
-          if (patternAttr) {
-            hintAttr =
-              "Input value format constraint unmet. Verify options or syntax.";
-          } else if (minAttr && maxAttr) {
-            hintAttr = `Numerical value constraint violated. Input must lie between ${minAttr} and ${maxAttr}.`;
-          } else if (minAttr) {
-            hintAttr = `Value threshold violation. Minimum accepted range is ${minAttr}.`;
-          } else if (maxAttr) {
-            hintAttr = `Value threshold violation. Maximum accepted bounds limit is ${maxAttr}.`;
-          } else if (isRequired) {
-            hintAttr =
-              "This clinical metrics marker is required for assessment computation.";
-          }
-        }
+        const explicitHint = field.getAttribute("hint");
 
         return (
           <div key={fid} style={{ marginBottom: "20px" }}>
@@ -120,12 +86,12 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
               id={`input-${fid}`}
               type={fType === "number" ? "number" : "text"}
               required={isRequired}
-              min={minAttr}
-              max={maxAttr}
-              pattern={patternAttr}
+              // THE FIX: Forcing undefined strips the attribute from the DOM completely if missing in XML
+              min={minAttr || undefined}
+              max={maxAttr || undefined}
+              pattern={patternAttr || undefined}
               placeholder={field.getAttribute("placeholder") || ""}
-              onInvalid={(e) => handleInvalidInput(e, hintAttr)}
-              onInput={(e) => handleInputChange(fid, fType, e.target.value)}
+              onChange={(e) => handleInputChange(fid, fType, e.target.value)}
               style={{
                 width: "100%",
                 padding: "10px 12px",
@@ -135,13 +101,11 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
                 border: "1px solid #cbd5e1",
                 borderRadius: "6px",
                 boxSizing: "border-box",
-                transition: "border-color 0.15s ease",
               }}
               value={formState[fid] ?? ""}
             />
 
-            {/* Visual Assist Helper Caption */}
-            {hintAttr && (
+            {explicitHint && (
               <span
                 style={{
                   display: "block",
@@ -151,14 +115,13 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
                   lineHeight: "1.4",
                 }}
               >
-                💡 {hintAttr}
+                💡 {explicitHint}
               </span>
             )}
           </div>
         );
       })}
 
-      {/* Submission trigger */}
       <button
         type="submit"
         style={{
@@ -178,7 +141,7 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
         onMouseOver={(e) => (e.target.style.background = "#0f172a")}
         onMouseOut={(e) => (e.target.style.background = "#1e293b")}
       >
-        Save & Continue Forward
+        {nextTarget ? "Save & Continue Forward" : "Submit & Conclude Pipeline"}
       </button>
     </form>
   );
