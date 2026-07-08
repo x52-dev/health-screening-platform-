@@ -10,6 +10,8 @@ export function StepRenderer({
   onRecordAiEvaluation,
   onNext,
 }) {
+  if (!stepNode) return null;
+
   const tagName = stepNode.tagName.toLowerCase();
   const typeAttr = stepNode.getAttribute("type");
 
@@ -45,7 +47,7 @@ export function StepRenderer({
       reason:
         stepNode.textContent.trim() ||
         "The orchestration matrix reached a terminal node.",
-      explanation: "All configured telemetry has been processed successfully.",
+      explanation: "Telemetry processed successfully.",
     };
     return (
       <OutcomeView
@@ -55,21 +57,33 @@ export function StepRenderer({
     );
   }
 
+  // Graceful fallback for entirely unknown node types
   return (
     <div
       style={{
-        color: "#dc2626",
         padding: "20px",
-        textAlign: "center",
-        fontWeight: "600",
-        fontFamily: "system-ui",
-        backgroundColor: "#fef2f2",
-        border: "1px solid #fecaca",
+        backgroundColor: "#f8fafc",
+        border: "1px solid #cbd5e1",
         borderRadius: "8px",
+        fontFamily: "system-ui",
       }}
     >
-      ⚠️ Unsupported Pipeline Variant: The orchestration layer cannot resolve
-      execution context for &lt;{tagName} type="{typeAttr}"&gt;.
+      <p style={{ margin: "0 0 10px 0", fontWeight: "600" }}>
+        Processing Step: {stepNode.getAttribute("id") || "Unknown"}
+      </p>
+      <button
+        onClick={() => onNext(stepNode.getAttribute("next"))}
+        style={{
+          padding: "8px 16px",
+          background: "#2563eb",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+      >
+        Continue Pipeline
+      </button>
     </div>
   );
 }

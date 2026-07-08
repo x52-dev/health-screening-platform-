@@ -3,7 +3,6 @@ import { StepRenderer } from "./components/StepRenderer.jsx";
 import { OutcomeView } from "./components/OutcomeView.jsx";
 import { apiClient } from "./utils/api.js";
 
-// Added onExit to the props
 export function WorkflowEngine({
   xmlDoc,
   workflowId,
@@ -13,7 +12,7 @@ export function WorkflowEngine({
   initialAiSummary = null,
   onExit = null,
 }) {
-  const [currentStepId, setCurrentStepId] = useState(initialStepId);
+  const [currentStepId, setCurrentStepId] = useState(initialStepId || "step_0");
   const [formState, setFormState] = useState(initialFormState);
   const [aiEvaluations, setAiEvaluations] = useState([]);
 
@@ -24,7 +23,7 @@ export function WorkflowEngine({
   const [terminalOutcome, setTerminalOutcome] = useState(null);
 
   const safelyLocateNode = (targetId) => {
-    if (!targetId) return null;
+    if (!targetId || !xmlDoc) return null;
     const cleanId = String(targetId).trim();
     let node = xmlDoc.querySelector(`[id="${cleanId}"]`);
     if (!node) {
@@ -41,7 +40,8 @@ export function WorkflowEngine({
   useEffect(() => {
     if (
       currentStepNode &&
-      currentStepNode.tagName.toLowerCase() === "outcome"
+      (currentStepNode.tagName.toLowerCase() === "outcome" ||
+        currentStepNode.getAttribute("type") === "outcome")
     ) {
       triggerFinalSubmission(currentStepId, currentStepNode.textContent.trim());
     }
@@ -62,19 +62,17 @@ export function WorkflowEngine({
         { idempotencyKey: submissionId },
       );
       setTerminalOutcome({
-        status: outcomeId.replace(/_/g, " ").toUpperCase(),
+        status: (outcomeId || "Concluded").replace(/_/g, " ").toUpperCase(),
         reason:
           specificReason || "The clinical pipeline has successfully concluded.",
         explanation: response.ai_synthesis,
       });
     } catch (err) {
-      console.error("Submission transmission failed:", err);
       setTerminalOutcome({
-        status: outcomeId.replace(/_/g, " ").toUpperCase(),
-        reason:
-          specificReason || "The clinical pipeline has successfully concluded.",
+        status: (outcomeId || "Concluded").replace(/_/g, " ").toUpperCase(),
+        reason: specificReason || "The pipeline concluded safely.",
         explanation:
-          "Final telemetry has been queued for network transmission (AI synthesis unavailable).",
+          "Final telemetry queued for network transmission (AI synthesis unavailable).",
       });
     }
   };
@@ -122,14 +120,9 @@ export function WorkflowEngine({
           >
             Synthesizing Clinical Handoff...
           </p>
-          <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
-            Analyzing session telemetry to generate a professional medical
-            summary.
-          </p>
         </div>
       );
     }
-    // Wires up the Outcome screen button to seamlessly route back to the Dashboard
     return (
       <OutcomeView
         outcome={terminalOutcome}
@@ -142,14 +135,39 @@ export function WorkflowEngine({
     return (
       <div
         style={{
-          padding: "24px",
-          color: "#dc2626",
-          fontWeight: "600",
-          fontFamily: "system-ui",
+          padding: "32px",
+          maxWidth: "500px",
+          margin: "40px auto",
+          border: "1px solid #fecaca",
+          borderRadius: "12px",
+          backgroundColor: "#fef2f2",
           textAlign: "center",
+          fontFamily: "system-ui",
         }}
       >
-        Engine Fault: [{currentStepId}] is missing from structural definitions.
+        <h3 style={{ color: "#dc2626", margin: "0 0 12px 0" }}>
+          Pipeline Disconnected
+        </h3>
+        <p style={{ margin: 0, color: "#991b1b" }}>
+          The engine attempted to route to step <b>[{currentStepId}]</b>, but it
+          is missing from the workflow architecture.
+        </p>
+        {onExit && (
+          <button
+            onClick={onExit}
+            style={{
+              marginTop: "20px",
+              padding: "8px 16px",
+              background: "#dc2626",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+            }}
+          >
+            Return to Dashboard
+          </button>
+        )}
       </div>
     );
   }
@@ -166,7 +184,6 @@ export function WorkflowEngine({
         boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)",
       }}
     >
-      {/* THE FIX: Back to Gateway Navigation Button */}
       {onExit && (
         <div style={{ marginBottom: "24px" }}>
           <button
@@ -179,18 +196,12 @@ export function WorkflowEngine({
               fontSize: "13px",
               fontWeight: "600",
               cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              transition: "color 0.15s ease",
             }}
-            onMouseOver={(e) => (e.target.style.color = "#0f172a")}
-            onMouseOut={(e) => (e.target.style.color = "#64748b")}
           >
             ← Back to Gateway
           </button>
         </div>
       )}
-
       <StepRenderer
         stepNode={currentStepNode}
         formState={formState}
@@ -236,17 +247,6 @@ export function WorkflowEngine({
             }}
           >
             "{initialAiSummary}"
-          </div>
-          <div
-            style={{
-              fontSize: "12px",
-              color: "#94a3b8",
-              marginTop: "12px",
-              textAlign: "center",
-            }}
-          >
-            Submitting edited values will overwrite this and generate a new
-            synthesis.
           </div>
         </div>
       )}

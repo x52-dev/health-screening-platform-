@@ -8,23 +8,19 @@ export function AIScreeningStep({
   onRecordAiEvaluation,
   onComplete,
 }) {
-  const [error, setError] = useState(null);
-
   useEffect(() => {
     const runInference = async () => {
       try {
+        // AI ETL guarantees strict format: <map><input key="..." ref="..." /></map>
         let inputNodes = Array.from(
-          stepNode.querySelectorAll("bindings input"),
+          stepNode.querySelectorAll("map input") || [],
         );
-        if (inputNodes.length === 0) {
-          inputNodes = Array.from(stepNode.querySelectorAll("map input"));
-        }
 
         const stepInputs = {};
         inputNodes.forEach((node) => {
           const key = node.getAttribute("key");
           const ref = node.getAttribute("ref");
-          if (formState[ref] !== undefined) {
+          if (key && ref && formState[ref] !== undefined) {
             stepInputs[key] = formState[ref];
           }
         });
@@ -35,44 +31,48 @@ export function AIScreeningStep({
           : "llama-3.1-8b-instant";
 
         const branchNodes = Array.from(
-          stepNode.querySelectorAll("routing branch"),
+          stepNode.querySelectorAll("routing branch") || [],
         );
-        const availableBranches = branchNodes.map((b) =>
-          b.getAttribute("when"),
-        );
+        const availableBranches = branchNodes
+          .map((b) => b.getAttribute("when"))
+          .filter(Boolean);
 
         const res = await apiClient.post("/api/v1/ai/mid-screen-eval", {
           session_id: sessionId,
           model_name: modelName,
-          current_step_id: stepNode.getAttribute("id"),
+          current_step_id: stepNode.getAttribute("id") || "ai_eval",
           step_inputs: stepInputs,
           available_branches: availableBranches,
         });
 
-        if (onRecordAiEvaluation) {
-          onRecordAiEvaluation(res);
-        }
+        if (onRecordAiEvaluation) onRecordAiEvaluation(res);
 
         if (res.fallback_triggered) {
           const fallbackNode = stepNode.querySelector("fallback");
-          onComplete(fallbackNode ? fallbackNode.getAttribute("target") : null);
+          onComplete(
+            fallbackNode
+              ? fallbackNode.getAttribute("target")
+              : stepNode.getAttribute("next"),
+          );
           return;
         }
 
         const selectedBranch = branchNodes.find(
           (b) => b.getAttribute("when") === res.label,
         );
-        // THE FIX: Fall back to the 'next' attribute if the AI label doesn't match a specific branch
-        const defaultTarget = stepNode.getAttribute("next");
         onComplete(
           selectedBranch
             ? selectedBranch.getAttribute("target")
-            : defaultTarget,
+            : stepNode.getAttribute("next"),
         );
       } catch (err) {
-        console.error("AI node exception:", err);
+        console.error("AI Mid-Screen Crash:", err);
         const fallbackNode = stepNode.querySelector("fallback");
-        onComplete(fallbackNode ? fallbackNode.getAttribute("target") : null);
+        onComplete(
+          fallbackNode
+            ? fallbackNode.getAttribute("target")
+            : stepNode.getAttribute("next"),
+        );
       }
     };
     runInference();

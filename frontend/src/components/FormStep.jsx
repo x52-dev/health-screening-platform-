@@ -1,7 +1,7 @@
 export function FormStep({ stepNode, formState, setFormState, onNext }) {
-  const stepId = stepNode.getAttribute("id");
+  const stepId = stepNode.getAttribute("id") || "unnamed_step";
   const nextTarget = stepNode.getAttribute("next");
-  const fields = Array.from(stepNode.querySelectorAll("field"));
+  const fields = Array.from(stepNode.querySelectorAll("field") || []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -9,19 +9,18 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
   };
 
   const handleInputChange = (fieldId, type, value) => {
+    // Treat both number and double as JavaScript Numbers for the JSON payload
     const processedValue =
-      type === "number" && value !== "" ? Number(value) : value;
+      (type === "number" || type === "double") && value !== ""
+        ? Number(value)
+        : value;
     setFormState((prev) => ({ ...prev, [fieldId]: processedValue }));
   };
 
   return (
     <form
       onSubmit={handleSubmit}
-      style={{
-        fontFamily:
-          'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: "#0f172a",
-      }}
+      style={{ fontFamily: "system-ui, sans-serif", color: "#0f172a" }}
     >
       <div
         style={{
@@ -30,39 +29,41 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
           marginBottom: "24px",
         }}
       >
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: "600",
-            color: "#64748b",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            marginBottom: "4px",
-          }}
-        >
-          Active Module Stage
-        </div>
         <h3
           style={{
             fontSize: "20px",
             fontWeight: "700",
             textTransform: "capitalize",
             margin: 0,
-            letterSpacing: "-0.02em",
           }}
         >
           {stepId.replace(/_/g, " ")}
         </h3>
       </div>
 
-      {fields.map((field) => {
-        const fid = field.getAttribute("id");
-        const fType = field.getAttribute("type") || "text";
+      {fields.length === 0 && (
+        <div style={{ color: "#64748b", marginBottom: "20px" }}>
+          No form inputs configured.
+        </div>
+      )}
+
+      {fields.map((field, i) => {
+        const fid = field.getAttribute("id") || `field_${i}`;
+        const fType = field.getAttribute("type") || "string"; // The AI will map this to string, number, or double
         const isRequired = field.getAttribute("required") === "true";
-        const minAttr = field.getAttribute("min");
-        const maxAttr = field.getAttribute("max");
-        const patternAttr = field.getAttribute("pattern");
-        const explicitHint = field.getAttribute("hint");
+        const hint = field.getAttribute("hint");
+
+        // Define exact HTML attributes based on the rigid enum type
+        let inputType = "text";
+        let stepAttr = undefined;
+
+        if (fType === "number") {
+          inputType = "number";
+          stepAttr = "1"; // Integers only
+        } else if (fType === "double") {
+          inputType = "number";
+          stepAttr = "any"; // Allows decimals (floats)
+        }
 
         return (
           <div key={fid} style={{ marginBottom: "20px" }}>
@@ -72,7 +73,6 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
                 marginBottom: "6px",
                 fontWeight: "600",
                 fontSize: "14px",
-                color: "#334155",
               }}
             >
               {field.getAttribute("label") || fid}
@@ -81,27 +81,22 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
               )}
             </label>
             <input
-              id={`input-${fid}`}
-              type={fType === "number" ? "number" : "text"}
+              type={inputType}
+              step={stepAttr}
               required={isRequired}
-              min={minAttr || undefined}
-              max={maxAttr || undefined}
-              pattern={patternAttr || undefined}
               placeholder={field.getAttribute("placeholder") || ""}
               onChange={(e) => handleInputChange(fid, fType, e.target.value)}
               style={{
                 width: "100%",
-                padding: "10px 12px",
+                padding: "10px",
                 fontSize: "14px",
-                color: "#0f172a",
-                backgroundColor: "#ffffff",
                 border: "1px solid #cbd5e1",
                 borderRadius: "6px",
                 boxSizing: "border-box",
               }}
               value={formState[fid] ?? ""}
             />
-            {explicitHint && (
+            {hint && (
               <span
                 style={{
                   display: "block",
@@ -111,7 +106,7 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
                   lineHeight: "1.4",
                 }}
               >
-                💡 {explicitHint}
+                💡 {hint}
               </span>
             )}
           </div>
@@ -124,20 +119,14 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
           width: "100%",
           padding: "12px",
           background: "#1e293b",
-          color: "#ffffff",
-          fontSize: "14px",
-          fontWeight: "600",
+          color: "white",
           border: "none",
           borderRadius: "6px",
           cursor: "pointer",
           marginTop: "12px",
-          transition: "background 0.15s ease",
-          boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
         }}
-        onMouseOver={(e) => (e.target.style.background = "#0f172a")}
-        onMouseOut={(e) => (e.target.style.background = "#1e293b")}
       >
-        {nextTarget ? "Save & Continue Forward" : "Submit & Conclude Pipeline"}
+        {nextTarget ? "Continue Pipeline" : "Conclude Pipeline"}
       </button>
     </form>
   );
