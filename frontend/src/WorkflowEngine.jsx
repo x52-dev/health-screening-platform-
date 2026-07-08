@@ -3,14 +3,24 @@ import { StepRenderer } from "./components/StepRenderer.jsx";
 import { OutcomeView } from "./components/OutcomeView.jsx";
 import { apiClient } from "./utils/api.js";
 
-export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
+// Added onExit to the props
+export function WorkflowEngine({
+  xmlDoc,
+  workflowId,
+  initialStepId,
+  initialFormState = {},
+  existingSubmissionId = null,
+  initialAiSummary = null,
+  onExit = null,
+}) {
   const [currentStepId, setCurrentStepId] = useState(initialStepId);
-  const [formState, setFormState] = useState({});
+  const [formState, setFormState] = useState(initialFormState);
   const [aiEvaluations, setAiEvaluations] = useState([]);
 
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [submissionId] = useState(() => crypto.randomUUID());
-
+  const [submissionId] = useState(
+    () => existingSubmissionId || crypto.randomUUID(),
+  );
   const [terminalOutcome, setTerminalOutcome] = useState(null);
 
   const safelyLocateNode = (targetId) => {
@@ -38,10 +48,7 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
   }, [currentStepId, currentStepNode]);
 
   const triggerFinalSubmission = async (outcomeId, specificReason = null) => {
-    // 1. Trigger the visual loading state while the LLM thinks
     setTerminalOutcome({ status: "loading" });
-
-    // 2. Await the final AI Synthesis from the backend
     try {
       const response = await apiClient.post(
         "/api/v1/submissions",
@@ -50,20 +57,18 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
           session_id: sessionId,
           workflow_id: workflowId,
           final_outcome: outcomeId,
+          form_data: formState,
         },
         { idempotencyKey: submissionId },
       );
-
-      // 3. Render the OutcomeView with the real, dynamically generated AI text
       setTerminalOutcome({
         status: outcomeId.replace(/_/g, " ").toUpperCase(),
         reason:
           specificReason || "The clinical pipeline has successfully concluded.",
-        explanation: response.ai_synthesis, // Powered by Groq
+        explanation: response.ai_synthesis,
       });
     } catch (err) {
       console.error("Submission transmission failed:", err);
-      // Fallback if the network drops out
       setTerminalOutcome({
         status: outcomeId.replace(/_/g, " ").toUpperCase(),
         reason:
@@ -85,10 +90,7 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
     setCurrentStepId(targetStepId);
   };
 
-  // --- RENDERING PHASE ---
-
   if (terminalOutcome) {
-    // Custom enterprise loading spinner for the final AI inference
     if (terminalOutcome.status === "loading") {
       return (
         <div
@@ -127,11 +129,11 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
         </div>
       );
     }
-
+    // Wires up the Outcome screen button to seamlessly route back to the Dashboard
     return (
       <OutcomeView
         outcome={terminalOutcome}
-        onReset={() => window.location.reload()}
+        onReset={onExit ? onExit : () => window.location.reload()}
       />
     );
   }
@@ -164,6 +166,31 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
         boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)",
       }}
     >
+      {/* THE FIX: Back to Gateway Navigation Button */}
+      {onExit && (
+        <div style={{ marginBottom: "24px" }}>
+          <button
+            onClick={onExit}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              color: "#64748b",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              transition: "color 0.15s ease",
+            }}
+            onMouseOver={(e) => (e.target.style.color = "#0f172a")}
+            onMouseOut={(e) => (e.target.style.color = "#64748b")}
+          >
+            ← Back to Gateway
+          </button>
+        </div>
+      )}
+
       <StepRenderer
         stepNode={currentStepNode}
         formState={formState}
@@ -174,6 +201,55 @@ export function WorkflowEngine({ xmlDoc, workflowId, initialStepId }) {
         }
         onNext={handleNext}
       />
+
+      {initialAiSummary && (
+        <div
+          style={{
+            marginTop: "32px",
+            paddingTop: "24px",
+            borderTop: "1px dashed #cbd5e1",
+            fontFamily: "system-ui, sans-serif",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              fontWeight: "600",
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "12px",
+            }}
+          >
+            Prior AI Clinical Synthesis
+          </div>
+          <div
+            style={{
+              backgroundColor: "#f8fafc",
+              padding: "16px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              fontSize: "14px",
+              color: "#334155",
+              lineHeight: "1.6",
+              fontStyle: "italic",
+            }}
+          >
+            "{initialAiSummary}"
+          </div>
+          <div
+            style={{
+              fontSize: "12px",
+              color: "#94a3b8",
+              marginTop: "12px",
+              textAlign: "center",
+            }}
+          >
+            Submitting edited values will overwrite this and generate a new
+            synthesis.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

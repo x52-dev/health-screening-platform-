@@ -11,7 +11,7 @@
                
         <field id="hb_level" type="number" required="false" min="2" max="25" 
                label="Hemoglobin (g/dL) - Optional" 
-               placeholder="e.g. 12.4" 
+               placeholder="e.g. 12" 
                hint="If available, enter a valid clinical hemoglobin reading between 2.0 and 25.0 g/dL." />
                
         <field id="patient_age" type="number" required="true" min="0" max="125" 

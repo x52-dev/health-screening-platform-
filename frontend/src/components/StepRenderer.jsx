@@ -13,7 +13,6 @@ export function StepRenderer({
   const tagName = stepNode.tagName.toLowerCase();
   const typeAttr = stepNode.getAttribute("type");
 
-  // 1. AI Inference Nodes
   if (tagName === "ai_screening" || typeAttr === "ai_screening") {
     return (
       <AIScreeningStep
@@ -26,7 +25,6 @@ export function StepRenderer({
     );
   }
 
-  // 2. Clinical Form Intakes
   if ((tagName === "step" && typeAttr === "form") || tagName === "form") {
     return (
       <FormStep
@@ -38,9 +36,7 @@ export function StepRenderer({
     );
   }
 
-  // 3. Terminal Outcome Nodes (This is the block that was missing!)
   if (tagName === "outcome" || typeAttr === "outcome") {
-    // Generate a synthetic outcome object derived directly from the XML node attributes
     const syntheticOutcome = {
       status:
         stepNode.getAttribute("label") ||
@@ -51,7 +47,6 @@ export function StepRenderer({
         "The orchestration matrix reached a terminal node.",
       explanation: "All configured telemetry has been processed successfully.",
     };
-
     return (
       <OutcomeView
         outcome={syntheticOutcome}
@@ -60,7 +55,6 @@ export function StepRenderer({
     );
   }
 
-  // 4. Final Fallback Boundary
   return (
     <div
       style={{

@@ -217,3 +217,10 @@ To safely dismantle container operations, press `CTRL+C` inside your active term
 docker compose down
 
 ```
+
+### Next step
+
+-- Take XML from server in compressed format, unzip it
+---Send it to local LLM for formatting push notification to receiever for filling form
+---exection happens as before
+---Enable logging

@@ -11,7 +11,7 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
   const handleInputChange = (fieldId, type, value) => {
     const processedValue =
       type === "number" && value !== "" ? Number(value) : value;
-    setFormState({ ...formState, [fieldId]: processedValue });
+    setFormState((prev) => ({ ...prev, [fieldId]: processedValue }));
   };
 
   return (
@@ -59,7 +59,6 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
         const fid = field.getAttribute("id");
         const fType = field.getAttribute("type") || "text";
         const isRequired = field.getAttribute("required") === "true";
-
         const minAttr = field.getAttribute("min");
         const maxAttr = field.getAttribute("max");
         const patternAttr = field.getAttribute("pattern");
@@ -81,12 +80,10 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
                 <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>
               )}
             </label>
-
             <input
               id={`input-${fid}`}
               type={fType === "number" ? "number" : "text"}
               required={isRequired}
-              // THE FIX: Forcing undefined strips the attribute from the DOM completely if missing in XML
               min={minAttr || undefined}
               max={maxAttr || undefined}
               pattern={patternAttr || undefined}
@@ -104,7 +101,6 @@ export function FormStep({ stepNode, formState, setFormState, onNext }) {
               }}
               value={formState[fid] ?? ""}
             />
-
             {explicitHint && (
               <span
                 style={{
